@@ -2,7 +2,8 @@ import sys
 import cv2
 import os
 from tqdm import tqdm
-
+from glob import glob
+import warnings
 
 def dissect_video(file_path, dump_folder):
     # if len(sys.argv) == 1:
@@ -10,7 +11,9 @@ def dissect_video(file_path, dump_folder):
     #         "please enter the path to the video to be dismembered:\n")
     # else:
     #     file_path = sys.argv[1]
-
+    if glob(f'{dump_folder}/*.png'):
+        warnings.warn('Video already dissected!')
+        return
     capture = cv2.VideoCapture(file_path)
     try:
         video_name = os.path.basename(file_path)[:-4]
@@ -23,20 +26,28 @@ def dissect_video(file_path, dump_folder):
 
         idx = 0
         frames = 0
-        while capture.grab():
-            frames += 1
-        capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        # while capture.grab():
+        #     frames += 1
+        # capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
         # progress_bar = tqdm(total=int(capture.get(cv2.CAP_PROP_FRAME_COUNT)))
-        progress_bar = tqdm(total=frames)
+        progress_bar = tqdm(total=10000)
         while True:
-            ret, frame = capture.read()
-            if not ret:
-                break
-            cv2.imwrite(dump_path.format(idx), frame)
-            idx += 1
-            # if not idx%500:
-            #     progress_bar.write(idx)
-            progress_bar.update()
+            try:
+                ret, frame = capture.read()
+                if not ret:
+                    break
+                cv2.imwrite(dump_path.format(idx), frame)
+                idx += 1
+                if not idx % 500:
+                    if idx >= progress_bar.total:
+                        progress_bar.total += 2000
+                    progress_bar.update(idx)
+            except Exception as e:
+                print(e)
+                exit()
     finally:
         capture.release()
     return dump_dir
+
+if __name__ == '__main__':
+    dissect_video(r"E:\Workspace\hagit\LieDetector\work\1.11_obv\VTS_01_3.VOB", r"E:\Workspace\hagit\LieDetector\work\1.11_obv")

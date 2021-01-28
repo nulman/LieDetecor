@@ -1,4 +1,5 @@
 import re
+import sys
 from bisect import bisect_left
 from collections import defaultdict
 
@@ -7,8 +8,8 @@ from collections import defaultdict
 # import face_recognition
 # import numpy as np
 import cv2
-from skimage import io
-import dlib
+# from skimage import io
+# import dlib
 from glob import glob
 import os
 from os import path
@@ -28,6 +29,7 @@ from ast import literal_eval
 import traceback
 from functools import partial
 from itertools import combinations
+# import face_recognition
 
 
 # import torch
@@ -85,36 +87,57 @@ class Application:
         :return: dlib frontal face detector
         """
         print("initializing detector...")
-        '''# detector = dlib.get_frontal_face_detector()
+        import face_recognition
+        # detector = dlib.get_frontal_face_detector()
         detector = partial(face_recognition.face_locations, model='cnn')
         # detector = None
-        caspath = path.join(cv2.data.haarcascades, r"haarcascade_profileface.xml")
+        # if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+        #     caspath = path.join('haarcascades_cuda', r"haarcascade_profileface.xml")
+        #     side = cv2.cuda.CascadeClassifier_create(caspath)
+        #     side.setMinNeighbors(8)
+        #     side.setScaleFactor(1.1)
+        #
+        #     def side_detector(img):
+        #         res = side.detectMultiScale(cv2.cuda_GpuMat(img)).download()
+        #         if res is None:
+        #             return []
+        #         return res
+        # else:
+        # select the correct cascade file sometime located in
+        # caspath = path.join(cv2.data.haarcascades, r"haarcascade_profileface.xml")
+        caspath = path.join('haarcascades', r"haarcascade_profileface.xml")
         side = cv2.CascadeClassifier(caspath)
+
+        def side_detector(img):
+            return side.detectMultiScale(
+            img, scaleFactor=1.1, minNeighbors=8, flags=cv2.CASCADE_SCALE_IMAGE)
+
         # predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
-        return detector, side  # , predictor'''
-        caspath = path.join(cv2.data.haarcascades, r"haarcascade_profileface.xml")
-        side = cv2.CascadeClassifier(caspath)
-        from DBFace.DBFace import DBF
-        import face_recognition
-        dbface = DBF()
-        # dbface.eval()
-        # if torch.cuda.is_available():
-        #     dbface.cuda()
-        # dbface.load("DBFace/model/dbface.pth")
-        return dbface.detect, side, face_recognition
+        return detector, side_detector, face_recognition  # , predictor
+        # """caspath = path.join(cv2.data.haarcascades, r"haarcascade_profileface.xml")
+        # side = cv2.CascadeClassifier(caspath)
+        # from DBFace.DBFace import DBF
+        # import face_recognition
+        # dbface = DBF()
+        # # dbface.eval()
+        # # if torch.cuda.is_available():
+        # #     dbface.cuda()
+        # # dbface.load("DBFace/model/dbface.pth")
+        # return dbface.detect, side, face_recognition"""
 
     def filter_faces(self, file):
+        # detector, side_face_detector, face_recognition = self.get_detector()
         detector, side_face_detector, face_recognition = self.get_detector()
-        # im = cv2.imread(file, cv2.COLOR_BGR2GRAY)
-        im = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+        # im = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+        im = face_recognition.load_image_file(file)
         # im = imread(file)
         # face_rects, _, _ = detector.run(im, 2, 0.3)
         # if '00126' in path.basename(file):
         #     tqdm.write(f'in {file}')
-        # face_rects = detector(im)
+        face_rects = detector(im)
         # face_rects = [list(map(int, item.box)) for item in face_rects]
-        face_rects = [list(map(int, [item.y, item.x + item.width, item.y + item.height, item.x])) for item in
-                      detector(im) if item.area > 400]
+        # face_rects = [list(map(int, [item.y, item.x + item.width, item.y + item.height, item.x])) for item in
+        #               detector(im) if item.area > 400]
         # im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
 
         # face_rects = face_recognition.face_locations(im, model='cnn')
@@ -128,9 +151,9 @@ class Application:
         #         box.extend([self.get_box(rect) for rect in face_rects])
         #     # os.renames(file, new_path)
         # print(box)
-        for item in map(self.get_side_box, side_face_detector.detectMultiScale(
-                im, scaleFactor=1.1, minNeighbors=8, flags=cv2.CASCADE_SCALE_IMAGE)):
-            box.append(item)
+        for item in map(self.get_side_box, side_face_detector(im)):
+            if len(item):
+                box.append(item)
         # print(box)
         if len(box) > 1:
             fset = set()
@@ -171,8 +194,8 @@ class Application:
     @staticmethod
     def get_box(rect):
         # return rect.top(), rect.right(), rect.bottom(), rect.left()
-        # return rect[1], rect[0], rect[3] - rect[1], rect[2]-rect[0]
-        return rect
+        return rect[1], rect[0], rect[3] - rect[1], rect[2]-rect[0]
+        # return rect
 
     @staticmethod
     def get_side_box(rect):
@@ -195,7 +218,7 @@ class Application:
                 continue
             value = mapping[key]
             # if value < 0.44:
-            if value < 0.55:
+            if value < 0.56:
                 print(key, value)
                 results.append(key)
         if len(results) == 0:
@@ -226,10 +249,10 @@ class Application:
 
     @staticmethod
     def similarity(images):
-        img1 = cv2.imread(images[0], cv2.IMREAD_GRAYSCALE)
-        img2 = cv2.imread(images[1], cv2.IMREAD_GRAYSCALE)
-        # return {path.basename(images[1]): structural_similarity(img1, img2, multichannel=True)}
-        return {path.basename(images[1]): structural_similarity(img1, img2)}
+            img1 = cv2.imread(images[0], cv2.IMREAD_GRAYSCALE)
+            img2 = cv2.imread(images[1], cv2.IMREAD_GRAYSCALE)
+            # return {path.basename(images[1]): structural_similarity(img1, img2, multichannel=True)}
+            return {path.basename(images[1]): structural_similarity(img1, img2)}
 
     def calculate_image_diff(self, files):
         """
@@ -240,8 +263,9 @@ class Application:
         ssim = {}
         prev = None
         collection = [[files[i], files[i + 1]] for i in range(len(files) - 1)]
+        print(collection[:10])
         print("generating image differences for scene segmentation...")
-        for item in process_map(self.similarity, collection, chunksize=3):
+        for item in process_map(self.similarity, collection, chunksize=3, max_workers=5):
             if item is not None:
                 print(item)
                 ssim.update(item)
@@ -345,6 +369,10 @@ class Application:
               f"{colorama.Fore.YELLOW}during{colorama.Fore.RESET} the reveal")
         print(f"press {colorama.Fore.YELLOW}2{colorama.Fore.RESET} for scenes "
               f"{colorama.Fore.YELLOW}after{colorama.Fore.RESET} the reveal")
+        print(f"press {colorama.Fore.YELLOW}3{colorama.Fore.RESET} for "
+              f"{colorama.Fore.YELLOW}interview{colorama.Fore.RESET} scenes")
+        print(f"press {colorama.Fore.YELLOW}4{colorama.Fore.RESET} for "
+              f"{colorama.Fore.YELLOW}other{colorama.Fore.RESET} scenes, like flashbacks")
         print(f'press {colorama.Fore.RED}q{colorama.Fore.RESET} to end')
         print(f'press any other key to skip frame')
 
@@ -369,7 +397,7 @@ class Application:
                                 result[i] = 1
                             else:
                                 result[i] = 0
-                            print(f"{path.basename(last)} : {result[i]}")
+                            # print(f"{path.basename(last)} : {result[i]}")
                             break
                         elif reveal:
                             img = cv2.imread(last)
@@ -404,20 +432,20 @@ class Application:
         finally:
             cv2.destroyAllWindows()
 
-    def sql_to_csv(self, handle=None):
+    def sql_to_csv(self, episode_name, handle=None):
         headers = 'video contestant_1_Decision contestant_2_Decision scene start_frame end_frame scene_type ' \
                   'contestant gender location_x location_y ' \
                   'contestant gender location_x location_y ' \
                   'contestant gender location_x location_y'.split(' ')
         # results = [headers]
         row_stringefier = lambda x: [str(item) for item in x]
-        with open(path.join(self.filtered_dir, 'csv2.csv'), 'w', newline='') as fh:
+        with open(path.join(self.filtered_dir, 'scene_data.csv'), 'w', newline='') as fh:
             writer = csv.writer(fh, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
             writer.writerow(headers)
             if handle:
                 db = handle
             else:
-                db = DB(self.filtered_dir)
+                db = DB(self.filtered_dir, episode_name)
             scenes = db.select('select distinct scene from data')
             decisions = db.select('select decision from decision order by  contestant asc')
             for scene in scenes:
@@ -444,7 +472,7 @@ class Application:
                     contestants.append((points[1] + points[3]) // 2)
                     contestants.append((points[0] + points[2]) // 2)
                 contestants += [''] * (12 - len(contestants))
-                file_name = path.basename(path.dirname(self.image_dir))
+                file_name = episode_name
                 row = [file_name] + decisions + [scene] + selector[0] + contestants
                 print(row)
                 # if ',' in row[3]:
@@ -454,6 +482,21 @@ class Application:
                 #     row[4] = ','.join(row_genders)
                 # results.append(row_stringefier(row))
                 writer.writerow(row_stringefier(row))
+
+    @staticmethod
+    def get_reveal_encodings(scene_range, encodings):
+        left = []
+        right = []
+        for frame_num in scene_range:
+            key = f'{frame_num:05}.png'
+            if key not in encodings:
+                return None, None
+            for item in encodings[key]:
+                if item['rect'][-1] < 360:
+                    left.append(item['encoding'])
+                else:
+                    right.append(item['encoding'])
+        return left, right
 
 
 class SqlAssistant:
@@ -481,8 +524,13 @@ if __name__ == '__main__':
     # sql_to_csv()
     # exit()
     # image_path = r'E:\Workspace\hagit\LieDetector\GB1.01\VTS_01_4.VOB_dump'
-    image_path = r'E:\Workspace\hagit\LieDetector\GB1.02\VTS_01_4_dump'
-    # dissect_video(r"E:\Workspace\hagit\GB1.02\GB1.02\VTS_01_4.VOB.mpg", image_path)
+    image_path = path.join('work', '1.11')
+    try:
+        name = re.findall(r'[\\\/](\d+\.\d+)[\D]*', image_path)[0]
+    except IndexError:
+        print('-E- episode not found, please make sure the path contains something like 1.01 (season.episode)')
+        sys.exit()
+    dissect_video(path.join(image_path, r"VTS_01_4.VOB"), image_path)
     app = Application(image_path, os.path.join(os.path.dirname(image_path), 'filtered_' + os.path.basename(image_path)))
     print(f'image dir:{app.image_dir}\nfiltered dir:{app.filtered_dir}')
     # app.image_dir = dissect_video(r"E:\Workspace\hagit\GB1.02\GB1.02\VTS_01_4.VOB.mpg")
@@ -505,7 +553,7 @@ if __name__ == '__main__':
         images = glob(os.path.join(app.image_dir, r'*.png'))
         # images = [(item, app.filtered_dir) for item in images]
         # NOTE: lower max_workers if memory is an issue
-        for item in process_map(app.filter_faces, images, chunksize=10, max_workers=3):
+        for item in process_map(app.filter_faces, images, chunksize=50, max_workers=5):
         # for impath in tqdm(images):
         #     item = app.filter_faces(impath)
             if item is not None:
@@ -523,12 +571,22 @@ if __name__ == '__main__':
 
     # TODO: prompt for results
     print(len(results))
-    c1 = app.get_contestant_encoding('the host', results, n_images=3)
+
+    c1 = app.get_contestant_encoding('the host', results, n_images=4)
     c1_gen = c1.pop(0)
-    c2 = app.get_contestant_encoding('contestant one', results, n_images=3)
+    c2 = app.get_contestant_encoding('contestant one (left)', results, n_images=4)
     c2_gen = c2.pop(0)
-    c3 = app.get_contestant_encoding('contestant two', results, n_images=3)
+    c3 = app.get_contestant_encoding('contestant two (right)', results, n_images=4)
     c3_gen = c3.pop(0)
+    for k, v in scene_types.items():
+        if v == 1:
+            print(f'adding scene {k} with range {scene_ranges[k]} to mapping')
+            left, right = app.get_reveal_encodings(scene_ranges[k], results)
+            if left is None or right is None:
+                continue
+            print(f'left {len(left)} right {len(right)}')
+            c2.extend(left)
+            c3.extend(right)
 
     participants = [*c1, *c2, *c3]
     genders = [c1_gen, c2_gen, c3_gen]
@@ -552,7 +610,6 @@ if __name__ == '__main__':
     # entry = lambda frame_id, participant_index, face,scene_id: f'''{frame_id}, {contestant_info[participant_index]
     #     ['id']}, {contestant_info[participant_index]['gender']}, {face}, {scene_id}'''
     import face_recognition
-
     for frame, data in tqdm(results.items()):
         for i, face in enumerate(data):
             threshold = 0.6
@@ -560,9 +617,9 @@ if __name__ == '__main__':
             while True:
                 face_rulings = defaultdict(list)
                 detection = face_recognition.compare_faces(participants, face['encoding'], threshold)
-                face_rulings[sum(detection[:samples])].append(0)
-                face_rulings[sum(detection[samples:2 * samples])].append(1)
-                face_rulings[sum(detection[2 * samples:])].append(2)
+                face_rulings[sum(detection[:len(c1)])].append(0)
+                face_rulings[sum(detection[len(c1):len(c1)+len(c2)])].append(1)
+                face_rulings[sum(detection[len(c1)+len(c2):])].append(2)
                 likely_face = max(face_rulings)
                 if len(face_rulings[likely_face]) > 1:
                     threshold -= 0.05
@@ -606,7 +663,7 @@ if __name__ == '__main__':
     # with open(path.join(filtered_dir, 'csv.csv'), 'w') as fh:
     #     writer = csv.writer(fh, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
     #     writer.writerows(tagged)
-    db = DB(app.filtered_dir, overwrite=True)
+    db = DB(app.filtered_dir, name, overwrite=True)
     for row in sqldata[:5]:
         for col in row:
             print(col, ':', type(col), ', ', end='')
@@ -614,7 +671,7 @@ if __name__ == '__main__':
     try:
         db.insert(sqldata)
         db.insert_decisions(decisions)
-        app.sql_to_csv(db)
+        app.sql_to_csv(name, handle=db)
     except Exception:
         traceback.print_exc()
         print(f'{colorama.Fore.RED}data dumped to dump.txt{colorama.Fore.RESET}')
